@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Desert Prince — Deluxe</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;height:100%;overflow:hidden;background:#120b18;touch-action:none}
+body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;color:#fff}
+canvas{width:100vw;height:100vh;display:block}
+#hud{position:fixed;inset:0;pointer-events:none}
+#title{position:absolute;top:12px;left:12px;padding:9px 13px;border-radius:12px;background:#130d18b8;border:1px solid #f4ce7866;backdrop-filter:blur(8px);font-weight:800;letter-spacing:.7px}
+#stats{position:absolute;top:12px;right:12px;padding:9px 13px;border-radius:12px;background:#130d18b8;border:1px solid #f4ce7866;backdrop-filter:blur(8px)}
+#quest{position:absolute;top:62px;left:12px;max-width:330px;padding:8px 12px;border-radius:10px;background:#130d18a8;border:1px solid #ffffff22;font-size:14px}
+#dialog{display:none;position:absolute;left:50%;bottom:105px;transform:translateX(-50%);width:min(680px,90vw);padding:15px 18px;border-radius:15px;background:#100b15ed;border:1px solid #f4ce7888;box-shadow:0 15px 50px #0009}
+#name{color:#ffd978;font-weight:800;margin-bottom:5px}.txt{line-height:1.4}
+#controls{position:absolute;inset:0}
+.btn{position:absolute;width:64px;height:64px;border-radius:18px;background:#101722b8;border:1px solid #ffffff44;color:#fff;font-size:25px;display:flex;align-items:center;justify-content:center;pointer-events:auto;user-select:none}
+#l{left:16px;bottom:22px}#r{left:88px;bottom:22px}#j{left:52px;bottom:94px}
+#s{right:18px;bottom:22px;width:76px;height:76px;border-radius:50%;background:#702b35dd}
+#i{right:100px;bottom:92px;width:54px;height:54px;font-size:18px}
+#start{position:fixed;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 28%,#6d3e4e,#25152b 45%,#09060c 100%)}
+.card{width:min(680px,88vw);padding:30px;border:1px solid #f0c96988;border-radius:22px;background:#110b15e8;box-shadow:0 30px 100px #000b;text-align:center}
+h1{font:500 clamp(38px,9vw,68px)/1 Georgia,serif;color:#ffd875;margin:0 0 8px;text-shadow:0 4px 18px #000}
+.sub{font-size:17px;color:#e8d4bd}.desc{color:#b9b0bd;line-height:1.5}
+#go{border:0;border-radius:13px;padding:14px 28px;background:#c38731;color:white;font-size:17px;font-weight:800}
+small{color:#928996}
+@media(min-width:900px){#controls{display:none}#dialog{bottom:25px}}
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="start"><div class="card">
+<h1>DESERT PRINCE</h1><div class="sub">Deluxe Edition · Глава I</div>
+<p class="desc">Яркий приключенческий платформер с плавной анимацией, песчаным городом, NPC, ловушками, врагами и оригинальной музыкой, созданной прямо в браузере.</p>
+<p><small>iPhone: ◀ ▶ ▲ и ⚔ · ПК: A/D, Space, J · E — поговорить</small></p>
+<button id="go">НАЧАТЬ ПРИКЛЮЧЕНИЕ</button>
+</div></div>
+<div id="hud">
+<div id="title">DESERT PRINCE · ГЛАВА I</div>
+<div id="stats">❤️ <span id="hp">5</span> &nbsp; 💰 <span id="coins">0</span></div>
+<div id="quest">Задание: поговорить с торговцем у ворот</div>
+<div id="dialog"><div id="name"></div><div class="txt" id="txt"></div></div>
+<div id="controls"><div class="btn" id="l">◀</div><div class="btn" id="r">▶</div><div class="btn" id="j">▲</div><div class="btn" id="s">⚔</div><div class="btn" id="i">E</div></div>
+</div>
+<script>
+const C=document.getElementById('game'),ctx=C.getContext('2d');
+let W,H,DPR=1;function size(){DPR=Math.min(devicePixelRatio||1,2);W=innerWidth;H=innerHeight;C.width=W*DPR;C.height=H*DPR;ctx.setTransform(DPR,0,0,DPR,0,0)}addEventListener('resize',size);size();
+
+const keys={l:0,r:0,j:0,a:0,i:0};function bind(id,k){let e=document.getElementById(id);e.onpointerdown=q=>{q.preventDefault();keys[k]=1};e.onpointerup=e.onpointercancel=()=>keys[k]=0}bind('l','l');bind('r','r');bind('j','j');bind('s','a');bind('i','i');
+addEventListener('keydown',e=>{if(['ArrowLeft','KeyA'].includes(e.code))keys.l=1;if(['ArrowRight','KeyD'].includes(e.code))keys.r=1;if(['Space','ArrowUp','KeyW'].includes(e.code))keys.j=1;if(e.code==='KeyJ')keys.a=1;if(e.code==='KeyE')keys.i=1});
+addEventListener('keyup',e=>{if(['ArrowLeft','KeyA'].includes(e.code))keys.l=0;if(['ArrowRight','KeyD'].includes(e.code))keys.r=0;if(['Space','ArrowUp','KeyW'].includes(e.code))keys.j=0;if(e.code==='KeyJ')keys.a=0;if(e.code==='KeyE')keys.i=0});
+
+const worldW=5200, ground=455;
+const plats=[[0,455,700,70],[790,405,300,24],[1160,350,350,24],[1570,430,450,75],[2070,365,300,24],[2420,315,340,24],[2810,405,390,24],[3250,345,340,24],[3660,410,1540,95],[510,350,115,20],[880,290,110,20],[1260,255,125,20],[1710,335,130,20],[2200,275,110,20],[2500,225,120,20],[2960,330,115,20],[3350,270,120,20],[3890,345,130,20],[4210,290,120,20]];
+const spikes=[[700,790],[1090,1160],[1510,1570],[2020,2070],[2370,2420],[2760,2810],[3200,3250],[3590,3660]];
+const npcs=[
+{x:350,y:401,type:'merchant',name:'Лейла',color:'#c58dce'},
+{x:1320,y:296,type:'old',name:'Старик Хасан',color:'#c8a071'},
+{x:3920,y:356,type:'guard',name:'Страж ворот',color:'#5b91b7'}
+];
+const foes=[{x:940,y:350,hp:2,v:.9},{x:1280,y:295,hp:2,v:-1},{x:1770,y:375,hp:3,v:1.1},{x:2510,y:260,hp:3,v:-1.2},{x:2910,y:350,hp:3,v:1},{x:3370,y:290,hp:3,v:-1.1},{x:4050,y:355,hp:4,v:1.2}];
+const coins=[620,850,1190,1350,1680,2210,2460,2860,3310,3760,3970,4300,4510];
+const P={x:110,y:385,w:36,h:62,vx:0,vy:0,on:false,face:1,hp:5,atk:0,inv:0,score:0,coins:0};
+let cam=0,started=false,won=false,dead=false,quest=0,time=0,dialogUntil=0,particles=[],collected=new Set(),musicStarted=false;
+
+function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
+function roundedRect(x,y,w,h,r){ctx.beginPath();ctx.roundRect(x,y,w,h,r);ctx.fill()}
+function say(n,t){document.getElementById('name').textContent=n;document.getElementById('txt').textContent=t;document.getElementById('dialog').style.display='block';dialogUntil=performance.now()+5200;voice(t)}
+function voice(t){try{speechSynthesis.cancel();let u=new SpeechSynthesisUtterance(t);u.lang='ru-RU';u.rate=.95;speechSynthesis.speak(u)}catch(e){}}
+function updateUI(){document.getElementById('hp').textContent=P.hp;document.getElementById('coins').textContent=P.coins;document.getElementById('quest').textContent=[
+'Задание: поговорить с торговцем у ворот',
+'Задание: найти Старика Хасана',
+'Задание: добраться до дворцовых ворот',
+'Задание: пройти через пустыню',
+'Глава I завершена'
+][quest]}
+
+function startMusic(){
+ if(musicStarted)return;musicStarted=true;
+ const A=new (window.AudioContext||window.webkitAudioContext)(), master=A.createGain();master.gain.value=.055;master.connect(A.destination);
+ const notes=[220,261.63,329.63,392,329.63,293.66,246.94,293.66];let step=0;
+ setInterval(()=>{if(A.state==='suspended')A.resume();let o=A.createOscillator(),g=A.createGain();o.type='triangle';o.frequency.value=notes[step++%notes.length];g.gain.setValueAtTime(0,A.currentTime);g.gain.linearRampToValueAtTime(.22,A.currentTime+.02);g.gain.exponentialRampToValueAtTime(.001,A.currentTime+.38);o.connect(g);g.connect(master);o.start();o.stop(A.currentTime+.4)},420);
+}
+
+function drawSky(){
+ let g=ctx.createLinearGradient(0,0,0,H);g.addColorStop(0,'#21143d');g.addColorStop(.42,'#8e4b59');g.addColorStop(1,'#e8a554');ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+ ctx.fillStyle='#ffe9aa';ctx.beginPath();ctx.arc(W*.78,90,42,0,7);ctx.fill();
+ // distant mountains
+ ctx.fillStyle='#573044';ctx.beginPath();ctx.moveTo(0,360);for(let i=0;i<=W;i+=80)ctx.lineTo(i,320+Math.sin(i*.012+cam*.001)*45);ctx.lineTo(W,520);ctx.lineTo(0,520);ctx.fill();
+ // city silhouettes
+ for(let i=0;i<24;i++){let bx=i*190-(cam*.22%190);let h=55+(i%4)*22;ctx.fillStyle='#47283a';ctx.fillRect(bx,430-h,100,h);ctx.fillStyle='#e4a24d';for(let q=0;q<3;q++)ctx.fillRect(bx+18+q*25,410-h,7,12)}
+}
+function drawPalm(x,y,s){let sx=x-cam;ctx.strokeStyle='#39271e';ctx.lineWidth=7*s;ctx.beginPath();ctx.moveTo(sx,y);ctx.quadraticCurveTo(sx-8*s,y-45*s,sx+5*s,y-90*s);ctx.stroke();ctx.fillStyle='#2d503d';for(let a=-1;a<=1;a+=.5){ctx.beginPath();ctx.ellipse(sx+5*s+a*22*s,y-92*s+a*3,25*s,7*s,a,0,7);ctx.fill()}}
+function drawPlatform(p){let [px,py,pw,ph]=p,sx=px-cam;let g=ctx.createLinearGradient(0,py,0,py+ph);g.addColorStop(0,'#d39b50');g.addColorStop(1,'#7b432d');ctx.fillStyle=g;ctx.fillRect(sx,py,pw,ph);ctx.fillStyle='#efc16b';ctx.fillRect(sx,py,pw,5);ctx.fillStyle='#6d3c2b';for(let i=0;i<pw;i+=42)ctx.fillRect(sx+i,py+11,24,4)}
+function drawCoin(cx,cy){let sx=cx-cam;ctx.save();ctx.translate(sx,cy);ctx.rotate(Math.sin(time*.005+cx)*.25);ctx.fillStyle='#ffd45e';ctx.beginPath();ctx.arc(0,0,10,0,7);ctx.fill();ctx.fillStyle='#fff0a4';ctx.font='bold 11px Georgia';ctx.textAlign='center';ctx.fillText('◆',0,4);ctx.restore()}
+function drawNPC(n){let sx=n.x-cam;ctx.save();ctx.translate(sx,n.y);ctx.fillStyle=n.color;ctx.fillRect(-15,10,30,42);ctx.fillStyle='#e2a77f';ctx.beginPath();ctx.arc(0,0,15,0,7);ctx.fill();ctx.fillStyle='#3a2532';ctx.fillRect(-16,-10,32,7);ctx.fillStyle='#e8c56d';ctx.fillRect(-16,35,12,6);ctx.fillRect(4,35,12,6);ctx.restore()}
+function drawEnemy(e){let sx=e.x-cam;ctx.save();ctx.translate(sx,e.y);ctx.fillStyle='#35213a';ctx.fillRect(-17,8,34,50);ctx.fillStyle='#a95143';ctx.beginPath();ctx.arc(0,0,15,0,7);ctx.fill();ctx.fillStyle='#e7c46d';ctx.fillRect(-18,-3,36,5);ctx.fillStyle='#c8d0d8';ctx.fillRect(11,17,25,4);ctx.restore()}
+function drawPlayer(){
+ let sx=P.x-cam,sy=P.y;ctx.save();ctx.translate(sx+18,sy+31);if(P.face<0)ctx.scale(-1,1);
+ let bob=Math.sin(time*.015)*2;
+ ctx.fillStyle='#171826';ctx.fillRect(-17,-31+bob,34,9);ctx.fillStyle='#e4a47c';ctx.fillRect(-12,-23+bob,24,20);ctx.fillStyle='#efc78f';ctx.fillRect(-8,-3,16,25);ctx.fillStyle='#28709a';ctx.fillRect(-15,1,30,20);ctx.fillStyle='#dca13c';ctx.fillRect(-15,21,11,8);ctx.fillRect(4,21,11,8);
+ ctx.fillStyle='#c9d3df';ctx.fillRect(13,-4,29,5);
+ if(P.atk){ctx.strokeStyle='#fff0a0';ctx.lineWidth=5;ctx.beginPath();ctx.arc(14,0,37,-.95,.55);ctx.stroke()}
+ ctx.restore()
+}
+function particle(x,y,c){particles.push({x,y,vx:(Math.random()-.5)*4,vy:-Math.random()*4,l:25,c})}
+
+function interact(){
+ let nearest=null,dist=75;for(const n of npcs){let d=Math.abs(P.x-n.x);if(d<dist){dist=d;nearest=n}}
+ if(nearest){if(nearest.type==='merchant'&&quest===0){quest=1;say(nearest.name,'Привет, путник! Старик Хасан ждёт тебя дальше по дороге. Возьми монеты — они пригодятся.');}
+ else if(nearest.type==='old'&&quest===1){quest=2;say(nearest.name,'Во дворец ведут ворота на востоке. Но страж не пропустит того, кто не собрал три золотых жетона.');}
+ else if(nearest.type==='guard'&&quest===2){if(P.coins>=3){quest=3;say(nearest.name,'Три жетона есть. Проходи. Впереди последний участок пустыни.');}else say(nearest.name,'Мне нужны три золотых жетона. Собери их в пустыне.');}}
+}
+
+function attack(){if(!started||P.atk)return;P.atk=14;for(const e of foes){if(e.hp>0&&Math.abs(e.x-P.x)<72&&Math.abs(e.y-P.y)<70){e.hp--;P.score+=100;for(let i=0;i<10;i++)particle(e.x,e.y,'#ffd56b');if(e.hp<=0)e.dead=1}}}
+function update(dt){
+ time=performance.now();
+ if(dead||won)return;
+ let dir=(keys.r?1:0)-(keys.l?1:0);P.vx+=(dir*.7);P.vx*=.82;P.vx=clamp(P.vx,-6,6);if(Math.abs(P.vx)>.25)P.face=P.vx>0?1:-1;
+ if(keys.j&&P.on){P.vy=-12;P.on=false}
+ P.vy=Math.min(P.vy+.55,14);P.x+=P.vx;P.y+=P.vy;P.on=false;
+ for(const p of plats){if(P.x+P.w/2>p[0]&&P.x-P.w/2<p[0]+p[2]&&P.y+P.h>=p[1]&&P.y+P.h<=p[1]+20&&P.vy>=0){P.y=p[1]-P.h;P.vy=0;P.on=true}}
+ if(keys.a){attack();keys.a=0}if(keys.i){interact();keys.i=0}
+ if(P.atk>0)P.atk--;if(P.inv>0)P.inv--;
+ for(let i=0;i<coins.length;i++){if(!collected.has(i)&&Math.abs(P.x-coins[i])<28&&Math.abs(P.y-395)<65){collected.add(i);P.coins++;P.score+=25;for(let q=0;q<7;q++)particle(coins[i],390,'#ffd45e')}}
+ for(const e of foes)if(e.hp>0&&!e.dead){e.x+=e.v;if(Math.abs(e.x-P.x)<38&&Math.abs(e.y-P.y)<65&&P.inv<=0){P.hp--;P.inv=70;P.vy=-7;if(P.hp<=0)dead=true}if(e.x<50||e.x>worldW-50)e.v*=-1}
+ for(const sp of spikes){if(P.x>sp[0]&&P.x<sp[1]&&P.y+P.h>420){P.hp--;P.x=100;P.y=300;P.vy=0;if(P.hp<=0)dead=true}}
+ if(quest===3&&P.x>4550){quest=4;won=true;say('Страж','Ты добрался до дворца. Глава первая завершена!')}
+ if(P.y>650){P.hp--;P.x=100;P.y=300;P.vy=0;if(P.hp<=0)dead=true}
+ P.x=clamp(P.x,20,worldW-30);cam=clamp(P.x-W*.34,0,worldW-W);updateUI();
+ for(const q of particles){q.x+=q.vx;q.y+=q.vy;q.vy+=.2;q.l--}particles=particles.filter(q=>q.l>0);
+}
+
+function draw(){
+ drawSky();
+ for(let i=0;i<8;i++)drawPalm(180+i*700,440,0.75+(i%3)*.12);
+ for(const p of plats)drawPlatform(p);
+ for(const sp of spikes){let sx=sp[0]-cam;ctx.fillStyle='#31192a';ctx.fillRect(sx,455,sp[1]-sp[0],70);ctx.fillStyle='#d25a3f';for(let i=0;i<sp[1]-sp[0];i+=18){ctx.beginPath();ctx.moveTo(sx+i,455);ctx.lineTo(sx+i+9,430);ctx.lineTo(sx+i+18,455);ctx.fill()}}
+ for(let i=0;i<coins.length;i++)if(!collected.has(i))drawCoin(coins[i],395);
+ for(const n of npcs)drawNPC(n);for(const e of foes)if(e.hp>0&&!e.dead)drawEnemy(e);
+ for(const q of particles){ctx.globalAlpha=q.l/25;ctx.fillStyle=q.c;ctx.fillRect(q.x-cam,q.y,6,6)}ctx.globalAlpha=1;
+ if(P.inv%8<4)drawPlayer();
+ if(dead||won){ctx.fillStyle='#08050bd9';ctx.fillRect(0,0,W,H);ctx.textAlign='center';ctx.fillStyle=won?'#ffd875':'#fff';ctx.font='bold 46px Georgia';ctx.fillText(won?'ГЛАВА I ПРОЙДЕНА':'ТЫ ПОГИБ',W/2,H/2-25);ctx.font='18px system-ui';ctx.fillStyle='#fff';ctx.fillText(won?'Продолжение следует…':'Перезагрузи страницу, чтобы начать снова',W/2,H/2+20);ctx.textAlign='left'}
+ if(dialogUntil&&performance.now()>dialogUntil)document.getElementById('dialog').style.display='none';
+}
+let last=performance.now();function loop(t){let dt=Math.min(2,(t-last)/16.67);last=t;if(started)update(dt);draw();requestAnimationFrame(loop)}requestAnimationFrame(loop);
+document.getElementById('go').onclick=()=>{started=true;document.getElementById('start').style.display='none';startMusic();say('Лейла','Добро пожаловать! Иди ко мне — у меня есть новости.');updateUI()};
+</script>
+</body></html>
