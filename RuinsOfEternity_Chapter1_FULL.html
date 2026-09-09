@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<title>Ruins of Eternity — Глава I</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#07090d;color:#eee;font-family:system-ui,-apple-system,Segoe UI,sans-serif}
+#game{position:fixed;inset:0;background:#07090d}
+canvas{display:block;width:100%;height:100%}
+#hud{position:fixed;top:10px;left:12px;right:12px;display:flex;justify-content:space-between;pointer-events:none;text-shadow:0 2px 4px #000}
+.panel{background:rgba(8,12,18,.72);border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:8px 11px;backdrop-filter:blur(5px)}
+#health{color:#e85c68}.bar{width:110px;height:8px;background:#222;border-radius:6px;overflow:hidden;margin-top:5px}.fill{height:100%;background:#c94b59;width:100%}
+#msg{position:fixed;left:50%;top:10%;transform:translateX(-50%);max-width:86%;text-align:center;background:rgba(4,7,12,.82);padding:10px 16px;border-radius:12px;opacity:0;transition:.25s;pointer-events:none}
+#dialog{position:fixed;left:50%;bottom:92px;transform:translateX(-50%);width:min(680px,92%);background:rgba(7,10,15,.94);border:1px solid #394454;border-radius:16px;padding:16px;display:none;box-shadow:0 15px 50px #000}
+#dialog h3{margin:0 0 7px;color:#d9b26b}#dialog p{margin:0 0 12px;line-height:1.45}
+#choices{display:flex;gap:8px;flex-wrap:wrap}button{font:inherit;color:#fff;background:#202936;border:1px solid #465263;border-radius:11px;padding:10px 14px}button:active{transform:scale(.97)}
+#touch{position:fixed;left:0;right:0;bottom:10px;display:flex;justify-content:space-between;align-items:end;padding:0 14px;pointer-events:none}
+.pad,.acts{display:grid;gap:6px;pointer-events:auto}.pad{grid-template-columns:repeat(3,52px);grid-template-rows:repeat(2,52px)}.acts{grid-template-columns:repeat(2,58px)}
+.t{width:52px;height:52px;padding:0;font-size:21px;opacity:.82;background:rgba(17,23,31,.78)}.blank{visibility:hidden}
+.act{width:58px;height:58px;border-radius:50%;padding:0;background:rgba(17,23,31,.84);font-size:22px}
+#start{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 40%,#1b2830,#07090d 62%);z-index:5}
+.startbox{width:min(560px,90%);padding:30px;text-align:center;border:1px solid #44505c;border-radius:20px;background:rgba(5,8,12,.86);box-shadow:0 20px 70px #000}
+.startbox h1{font-family:Georgia,serif;font-size:38px;letter-spacing:2px;margin:0 0 8px}.startbox p{color:#aeb6c0;line-height:1.5}.startbox button{margin-top:10px;background:#8d6b39;border-color:#bd9b60;padding:13px 22px}
+@media(min-width:900px){#touch{opacity:.55}.pad .t,.acts .act{width:58px;height:58px}}
+</style>
+</head>
+<body>
+<div id="game"><canvas id="c"></canvas></div>
+<div id="hud">
+  <div class="panel">ГЛАВА I · ПЕПЕЛ У ВОРОТ<br><span id="objective">Идите к руинам</span></div>
+  <div class="panel">HP <span id="hptext">100</span><div class="bar"><div id="hpfill" class="fill"></div></div></div>
+</div>
+<div id="msg"></div>
+<div id="dialog"><h3 id="speaker"></h3><p id="line"></p><div id="choices"></div></div>
+<div id="touch">
+  <div class="pad">
+    <button class="t blank">•</button><button class="t" data-k="up">▲</button><button class="t blank">•</button>
+    <button class="t" data-k="left">◀</button><button class="t" data-k="down">▼</button><button class="t" data-k="right">▶</button>
+  </div>
+  <div class="acts"><button class="act" id="attack">⚔</button><button class="act" id="interact">✦</button></div>
+</div>
+<div id="start"><div class="startbox">
+<h1>RUINS OF ETERNITY</h1><p>Глава I — Пепел у ворот</p>
+<p>Ты просыпаешься у дороги, ведущей к древним руинам. Впереди — туман, каменные ворота и что-то, что не должно было проснуться.</p>
+<button id="begin">НАЧАТЬ ГЛАВУ</button>
+</div></div>
+<script>
+const c=document.getElementById('c'),ctx=c.getContext('2d');
+let W,H,DPR,keys={},running=false,last=0,shake=0;
+const world={w:2400,h:1500};
+const player={x:310,y:1180,r:18,hp:100,maxhp:100,speed:190,atk:0,cool:0,dirX:1,dirY:0};
+let state={stage:0,enemy:null,gate:false,oldman:false,crystal:false,won:false};
+const cam={x:0,y:0};
+
+function resize(){DPR=Math.min(devicePixelRatio||1,2);W=innerWidth;H=innerHeight;c.width=W*DPR;c.height=H*DPR;c.style.width=W+'px';c.style.height=H+'px';ctx.setTransform(DPR,0,0,DPR,0,0)}
+addEventListener('resize',resize);resize();
+
+const trees=[];
+for(let i=0;i<115;i++){let x=60+Math.random()*2280,y=70+Math.random()*1360;if(Math.hypot(x-player.x,y-player.y)>170)trees.push({x,y,s:16+Math.random()*20})}
+const rocks=[];
+for(let i=0;i<55;i++)rocks.push({x:Math.random()*2300,y:Math.random()*1400,s:7+Math.random()*13});
+const ruins=[{x:900,y:700,w:360,h:210},{x:1580,y:470,w:440,h:300}];
+
+function sx(x){return x-cam.x}function sy(y){return y-cam.y}
+function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
+function dist(a,b){return Math.hypot(a.x-b.x,a.y-b.y)}
+function say(t){const e=document.getElementById('msg');e.textContent=t;e.style.opacity=1;clearTimeout(say.t);say.t=setTimeout(()=>e.style.opacity=0,1800)}
+function dialog(name,text,buttons){document.getElementById('speaker').textContent=name;document.getElementById('line').textContent=text;let q=document.getElementById('choices');q.innerHTML='';buttons.forEach(b=>{let x=document.createElement('button');x.textContent=b[0];x.onclick=b[1];q.appendChild(x)});document.getElementById('dialog').style.display='block'}
+function closeDialog(){document.getElementById('dialog').style.display='none'}
+function objective(t){document.getElementById('objective').textContent=t}
+
+function draw(){
+ ctx.clearRect(0,0,W,H);
+ ctx.fillStyle='#101814';ctx.fillRect(0,0,W,H);
+ // ground tiles
+ const tile=64;
+ for(let y=Math.floor(cam.y/tile)*tile;y<cam.y+H+tile;y+=tile)
+ for(let x=Math.floor(cam.x/tile)*tile;x<cam.x+W+tile;x+=tile){
+   ctx.fillStyle=((x/tile+y/tile)&1)?'#111a17':'#121c18';ctx.fillRect(sx(x),sy(y),tile+1,tile+1);
+ }
+ // paths
+ ctx.strokeStyle='#2a2923';ctx.lineWidth=95;ctx.beginPath();ctx.moveTo(sx(260),sy(1180));ctx.quadraticCurveTo(sx(650),sy(1050),sx(930),sy(700));ctx.quadraticCurveTo(sx(1200),sy(470),sx(1730),sy(610));ctx.stroke();
+ ctx.strokeStyle='#37342b';ctx.lineWidth=78;ctx.beginPath();ctx.moveTo(sx(260),sy(1180));ctx.quadraticCurveTo(sx(650),sy(1050),sx(930),sy(700));ctx.quadraticCurveTo(sx(1200),sy(470),sx(1730),sy(610));ctx.stroke();
+ // ruins
+ ruins.forEach(r=>{ctx.fillStyle='#2b3030';ctx.fillRect(sx(r.x),sy(r.y),r.w,r.h);ctx.strokeStyle='#53514a';ctx.lineWidth=8;ctx.strokeRect(sx(r.x),sy(r.y),r.w,r.h);
+   for(let xx=r.x+30;xx<r.x+r.w;xx+=70){ctx.fillStyle='#3d403d';ctx.fillRect(sx(xx),sy(r.y+12),32,30);ctx.fillRect(sx(xx),sy(r.y+r.h-40),32,30)}
+ });
+ // gate
+ ctx.fillStyle='#202523';ctx.fillRect(sx(2020),sy(330),40,330);ctx.fillRect(sx(2180),sy(330),40,330);ctx.fillRect(sx(2020),sy(330),200,55);
+ ctx.strokeStyle=state.gate?'#aa8b52':'#52595a';ctx.lineWidth=6;ctx.strokeRect(sx(2040),sy(385),160,275);
+ // trees
+ trees.forEach(t=>{ctx.fillStyle='#202a22';ctx.beginPath();ctx.arc(sx(t.x),sy(t.y),t.s,0,7);ctx.fill();ctx.fillStyle='#29372a';ctx.beginPath();ctx.arc(sx(t.x-8),sy(t.y-10),t.s*.75,0,7);ctx.fill();ctx.fillStyle='#30271c';ctx.fillRect(sx(t.x-3),sy(t.y+t.s*.55),6,18)});
+ rocks.forEach(r=>{ctx.fillStyle='#3c4542';ctx.beginPath();ctx.ellipse(sx(r.x),sy(r.y),r.s,r.s*.65,0,0,7);ctx.fill()});
+ // quest crystal
+ if(!state.crystal){ctx.save();ctx.translate(sx(1320),sy(560));ctx.rotate(performance.now()/700);ctx.fillStyle='#8ab6c4';ctx.beginPath();ctx.moveTo(0,-20);ctx.lineTo(14,0);ctx.lineTo(0,22);ctx.lineTo(-14,0);ctx.closePath();ctx.fill();ctx.restore()}
+ // NPC
+ if(!state.oldman){let x=760,y=930;ctx.fillStyle='#6d5845';ctx.beginPath();ctx.arc(sx(x),sy(y),20,0,7);ctx.fill();ctx.fillStyle='#c8b58b';ctx.fillRect(sx(x-13),sy(y+15),26,35)}
+ // enemy
+ if(state.enemy){let e=state.enemy;ctx.fillStyle='#6d3038';ctx.beginPath();ctx.arc(sx(e.x),sy(e.y),e.r,0,7);ctx.fill();ctx.fillStyle='#d2a45c';ctx.fillRect(sx(e.x-11),sy(e.y-5),7,4);ctx.fillRect(sx(e.x+4),sy(e.y-5),7,4)}
+ // player
+ ctx.save();ctx.translate(sx(player.x),sy(player.y));ctx.rotate(Math.atan2(player.dirY,player.dirX));
+ ctx.fillStyle='#0a0d10';ctx.beginPath();ctx.arc(0,0,22,0,7);ctx.fill();ctx.fillStyle='#b6b1a1';ctx.beginPath();ctx.arc(3,0,13,0,7);ctx.fill();ctx.fillStyle='#5e6a70';ctx.fillRect(10,-4,22,8);
+ if(player.atk>0){ctx.strokeStyle='#d7c17d';ctx.lineWidth=5;ctx.beginPath();ctx.arc(0,0,38,-.9,.9);ctx.stroke()}ctx.restore();
+ // labels
+ ctx.font='bold 14px system-ui';ctx.textAlign='center';ctx.fillStyle='#ddd';
+ if(!state.oldman)ctx.fillText('СТАРЕЦ',sx(760),sy(885));
+ if(!state.crystal)ctx.fillText('✦ ОСКОЛОК',sx(1320),sy(520));
+ if(state.enemy)ctx.fillText('СТРАЖ РУИН',sx(state.enemy.x),sy(state.enemy.y-38));
+ // vignette
+ const g=ctx.createRadialGradient(W/2,H/2,Math.min(W,H)*.25,W/2,H/2,Math.max(W,H)*.7);g.addColorStop(0,'rgba(0,0,0,0)');g.addColorStop(1,'rgba(0,0,0,.48)');ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+}
+
+function move(dt){
+ let x=(keys.right?1:0)-(keys.left?1:0),y=(keys.down?1:0)-(keys.up?1:0);
+ if(x||y){let l=Math.hypot(x,y);x/=l;y/=l;player.x+=x*player.speed*dt;player.y+=y*player.speed*dt;player.dirX=x;player.dirY=y}
+ player.x=clamp(player.x,40,world.w-40);player.y=clamp(player.y,40,world.h-40);
+ player.cool=Math.max(0,player.cool-dt);player.atk=Math.max(0,player.atk-dt);
+ if(state.enemy && dist(player,state.enemy)<52 && player.cool<=0){player.hp-=9;player.cool=0.8;shake=5;if(player.hp<=0){player.hp=100;player.x=310;player.y=1180;say('Ты пал. Но судьба вернула тебя к дороге.')}} 
+ cam.x=clamp(player.x-W/2,0,world.w-W);cam.y=clamp(player.y-H/2,0,world.h-H);
+}
+
+function attack(){if(player.atk>0)return;player.atk=.28; if(state.enemy&&dist(player,state.enemy)<92){state.enemy.hp-=34;say('Удар попал!');if(state.enemy.hp<=0){state.enemy=null;state.gate=true;state.stage=3;objective('Откройте древние ворота');say('Страж повержен. Ворота открылись.')}}}
+function interact(){
+ if(state.won){return}
+ if(!state.oldman && dist(player,{x:760,y:930})<90){dialog('Старец','Я ждал тебя. Руины просыпаются. Возьми осколок у алтаря — он покажет дорогу.',[['Взять квест',()=>{state.oldman=true;state.stage=1;objective('Найдите осколок у алтаря');closeDialog();say('Новый путь открыт')}],['Уйти',closeDialog]]);return}
+ if(!state.crystal && dist(player,{x:1320,y:560})<90){state.crystal=true;state.stage=2;objective('Доберитесь до ворот руин');dialog('Осколок','Кристалл холоден, но внутри него движется свет. Вдалеке раздаётся рёв.',[['Продолжить',()=>{closeDialog();say('Что-то заметило тебя…');state.enemy={x:1700,y:610,r:25,hp:100}}]]);return}
+ if(state.gate&&dist(player,{x:2120,y:610})<100){state.stage=4;state.won=true;objective('Глава I завершена');dialog('Глава I','Ты проходишь через ворота. За ними — город, погребённый под вечным пеплом. Где-то впереди звенит колокол.',[['Завершить',()=>{closeDialog();say('ГЛАВА I ЗАВЕРШЕНА');}]])}
+}
+function tick(t){let dt=Math.min(.033,(t-last)/1000||0);last=t;if(running){move(dt);draw();document.getElementById('hptext').textContent=Math.max(0,Math.round(player.hp));document.getElementById('hpfill').style.width=Math.max(0,player.hp)+'%'}requestAnimationFrame(tick)}
+requestAnimationFrame(tick);
+
+document.getElementById('begin').onclick=()=>{document.getElementById('start').style.display='none';running=true;say('Добро пожаловать в Ruins of Eternity');objective('Найдите старца у дороги')};
+document.getElementById('attack').onclick=attack;document.getElementById('interact').onclick=interact;
+addEventListener('keydown',e=>{let k=e.key.toLowerCase();if(['w','arrowup'].includes(k))keys.up=true;if(['s','arrowdown'].includes(k))keys.down=true;if(['a','arrowleft'].includes(k))keys.left=true;if(['d','arrowright'].includes(k))keys.right=true;if(k===' '||k==='j')attack();if(k==='e')interact()});
+addEventListener('keyup',e=>{let k=e.key.toLowerCase();if(['w','arrowup'].includes(k))keys.up=false;if(['s','arrowdown'].includes(k))keys.down=false;if(['a','arrowleft'].includes(k))keys.left=false;if(['d','arrowright'].includes(k))keys.right=false});
+document.querySelectorAll('.t').forEach(b=>{let k=b.dataset.k;if(!k)return;b.onpointerdown=()=>keys[k]=true;b.onpointerup=b.onpointercancel=b.onpointerleave=()=>keys[k]=false});
+</script>
+</body></html>
