@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Ruins of Eternity — Глава I</title>
+<style>
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#050608;color:#eee;font-family:system-ui,-apple-system,Segoe UI,sans-serif;touch-action:none}
+#game{position:fixed;inset:0}
+#hud{position:fixed;inset:0;pointer-events:none}
+#top{position:absolute;left:14px;right:14px;top:12px;display:flex;justify-content:space-between;gap:12px}
+.panel{background:rgba(7,9,12,.72);border:1px solid rgba(220,190,120,.28);border-radius:12px;padding:9px 12px;backdrop-filter:blur(6px);box-shadow:0 8px 30px #0008}
+#quest{max-width:62vw;font-size:14px}
+#stats{font-size:13px;text-align:right;min-width:110px}
+.bar{height:7px;background:#222;border-radius:8px;overflow:hidden;margin-top:5px}.hp{height:100%;background:#b43d3d;width:100%}
+#hint{position:absolute;left:50%;bottom:115px;transform:translateX(-50%);font-size:13px;color:#ddd;background:#080a0dcc;padding:8px 12px;border-radius:10px;max-width:80vw;text-align:center}
+#dialog{display:none;position:absolute;left:50%;bottom:18px;transform:translateX(-50%);width:min(760px,88vw);pointer-events:auto}
+#speaker{color:#d8b46a;font-weight:700;margin-bottom:4px}
+#text{line-height:1.4;font-size:15px}
+#touch{position:absolute;inset:0;pointer-events:none}
+#joy{position:absolute;left:20px;bottom:22px;width:118px;height:118px;border-radius:50%;background:#ffffff10;border:1px solid #ffffff22;pointer-events:auto}
+#knob{position:absolute;width:54px;height:54px;border-radius:50%;left:32px;top:32px;background:#ffffff22;border:1px solid #ffffff33}
+.btn{position:absolute;bottom:28px;width:62px;height:62px;border-radius:50%;border:1px solid #d9b66d55;background:#17140fcc;color:#eee;font-size:12px;pointer-events:auto;display:flex;align-items:center;justify-content:center;user-select:none}
+#attack{right:24px}.#dodge{}
+#dodge{right:96px;bottom:96px;width:52px;height:52px}
+#potion{right:22px;bottom:104px;width:52px;height:52px}
+#start{position:absolute;inset:0;background:radial-gradient(circle at 50% 35%,#28313c 0,#090b0f 55%,#030405 100%);display:flex;align-items:center;justify-content:center;z-index:5}
+#start .card{width:min(680px,86vw);padding:28px;border-radius:18px;border:1px solid #c6a75d55;background:#07090ddd;box-shadow:0 20px 80px #000}
+h1{font-family:Georgia,serif;font-weight:500;letter-spacing:1px;margin:0 0 7px;color:#e1c27b;font-size:clamp(28px,6vw,52px)}
+.sub{color:#aeb4bd;margin-bottom:20px}.startbtn{display:inline-block;padding:13px 22px;border-radius:12px;background:#9a6f2e;color:#fff;font-weight:700;border:0;font-size:16px}
+small{color:#89919d}
+@media(min-width:900px){#joy,.btn{display:none}#hint{bottom:24px}}
+</style>
+</head>
+<body>
+<div id="game"></div>
+<div id="start"><div class="card">
+<h1>Ruins of Eternity</h1>
+<div class="sub">Глава I — Колокол в тумане</div>
+<p>Ты приходишь в заброшенную долину, где каждую ночь звучит колокол. Старики говорят, что после третьего удара из руин выходит Тень.</p>
+<p><small>WASD — движение · мышь — обзор · ЛКМ — удар · Space — уклонение · E — взаимодействие · Q — зелье</small></p>
+<button class="startbtn" id="startBtn">ВОЙТИ В ДОЛИНУ</button>
+</div></div>
+<div id="hud">
+<div id="top"><div id="quest" class="panel">Задание: поговорить со стариком у часовни</div><div id="stats" class="panel">HP <div class="bar"><div class="hp" id="hp"></div></div><div id="statText">100 / 100</div></div></div>
+<div id="hint">Иди к часовне. В тумане кто-то наблюдает.</div>
+<div id="dialog" class="panel"><div id="speaker"></div><div id="text"></div></div>
+</div>
+<div id="touch">
+<div id="joy"><div id="knob"></div></div>
+<div id="dodge" class="btn">УКЛОН</div><div id="potion" class="btn">ЗЕЛЬЕ</div><div id="attack" class="btn">УДАР</div>
+</div>
+
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x07090d);
+scene.fog=new THREE.FogExp2(0x10151b,0.018);
+const camera=new THREE.PerspectiveCamera(62,innerWidth/innerHeight,.1,260);
+const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
+renderer.setPixelRatio(Math.min(devicePixelRatio,1.5)); renderer.setSize(innerWidth,innerHeight);
+renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+document.getElementById('game').appendChild(renderer.domElement);
+
+const hemi=new THREE.HemisphereLight(0x8090a8,0x15110d,1.15); scene.add(hemi);
+const moon=new THREE.DirectionalLight(0x9aaed0,2.0); moon.position.set(-35,45,18); moon.castShadow=true; moon.shadow.mapSize.set(1024,1024); scene.add(moon);
+
+const world=new THREE.Group(); scene.add(world);
+function mat(c,rough=1,metal=0){return new THREE.MeshStandardMaterial({color:c,roughness:rough,metalness:metal});}
+const grass=mat(0x172019), dirt=mat(0x302820), stone=mat(0x4a4741), darkstone=mat(0x25282b), wood=mat(0x3b2920), cloth=mat(0x27313a), skin=mat(0x9a7059), steel=mat(0x687078,.45,.65), gold=mat(0x9e7a38,.45,.65), red=mat(0x681f22);
+
+function box(n,s,m,p,rot){let g=new THREE.BoxGeometry(...s),o=new THREE.Mesh(g,m);o.name=n;o.position.set(...p);if(rot)o.rotation.set(...rot);o.castShadow=o.receiveShadow=true;world.add(o);return o}
+function cyl(n,r,h,m,p,seg=10){let o=new THREE.Mesh(new THREE.CylinderGeometry(r,r,h,seg),m);o.name=n;o.position.set(...p);o.castShadow=o.receiveShadow=true;world.add(o);return o}
+function tree(x,z,scale=1){cyl('trunk',.42*scale,4*scale,wood,[x,2*scale,z],8);let crown=new THREE.Mesh(new THREE.ConeGeometry(2.2*scale,5*scale,8),grass);crown.position.set(x,6*scale,z);crown.castShadow=true;world.add(crown)}
+// terrain
+box('ground',[120,.5,120],grass,[0,-.25,0]);
+for(let i=0;i<32;i++){let x=(i*37%110)-55,z=(i*71%105)-52;if(Math.abs(x)<12&&z>-15)continue;tree(x,z,.7+(i%4)*.15)}
+// road
+box('road',[7,.08,105],dirt,[0,.03,-5]);
+for(let i=0;i<24;i++){let z=-54+i*4.5; box('stone',[1.5,.22,.65],stone,[(i%2? -2.1:2.1),.18,z])}
+// river
+box('river',[12,.06,70],new THREE.MeshStandardMaterial({color:0x17354b,roughness:.2,metalness:.2,transparent:true,opacity:.85}),[18,.05,-10]);
+// chapel
+box('chapel',[12,6,10],darkstone,[0,3,-45]); box('roof',[14,1,12],wood,[0,6.5,-45],[0,0,.12]);
+for(let x of [-4,-2,2,4])box('beam',[.45,5,.45],wood,[x,3,-39.8]);
+box('gate',[8,6,.7],darkstone,[0,3,5]); box('arch',[10,1,.8],stone,[0,6.5,5]);
+cyl('bell',1,1.2,gold,[0,9,-45],20); 
+// ruins
+for(let i=0;i<11;i++){let a=i*.57;let r=10+(i%3)*2;box('ruin',[1.5,2+(i%2),1.5],stone,[Math.cos(a)*r,1+((i%2)*.5),Math.sin(a)*r-28],[0,a,0])}
+// lanterns
+const flames=[];
+function lantern(x,z){cyl('post',.13,2.4,wood,[x,1.2,z],7);let l=new THREE.PointLight(0xffa94a,2.2,12);l.position.set(x,2.5,z);world.add(l);let f=new THREE.Mesh(new THREE.SphereGeometry(.18,8,8),new THREE.MeshBasicMaterial({color:0xffb34d}));f.position.set(x,2.5,z);world.add(f);flames.push(l)}
+[-5,5].forEach(x=>{lantern(x,-5);lantern(x,-28);lantern(x,-44)});
+
+// characters
+function makeHero(){
+ const g=new THREE.Group();
+ let body=new THREE.Mesh(new THREE.CapsuleGeometry(.55,1.15,4,8),cloth);body.position.y=1.15;g.add(body);
+ let head=new THREE.Mesh(new THREE.SphereGeometry(.43,12,10),skin);head.position.y=2.15;g.add(head);
+ let hair=new THREE.Mesh(new THREE.SphereGeometry(.46,12,8,0,Math.PI*2,0,Math.PI*.55),darkstone);hair.position.y=2.34;g.add(hair);
+ for(let s of [-1,1]){let arm=new THREE.Mesh(new THREE.CapsuleGeometry(.16,.9,3,6),cloth);arm.position.set(s*.7,1.25,0);arm.rotation.z=s*.15;g.add(arm)}
+ let sword=new THREE.Mesh(new THREE.BoxGeometry(.11,1.8,.18),steel);sword.position.set(.78,1.05,-.15);sword.rotation.z=-.45;g.add(sword);
+ g.traverse(o=>{if(o.isMesh)o.castShadow=true});return g;
+}
+const player=makeHero(); player.position.set(0,0,20);world.add(player);
+const elder=new THREE.Group(); elder.add(new THREE.Mesh(new THREE.CapsuleGeometry(.5,1.0,4,8),cloth));elder.children[0].position.y=1;let eh=new THREE.Mesh(new THREE.SphereGeometry(.4,10,8),skin);eh.position.y=2;elder.add(eh);elder.position.set(2,0,-40);elder.traverse(o=>{if(o.isMesh)o.castShadow=true});world.add(elder);
+function enemy(z,x=0){let g=new THREE.Group();let b=new THREE.Mesh(new THREE.CapsuleGeometry(.55,1.2,4,8),darkstone);b.position.y=1.1;g.add(b);let h=new THREE.Mesh(new THREE.SphereGeometry(.42,10,8),red);h.position.y=2.15;g.add(h);g.position.set(x,0,z);g.userData={hp:45,max:45,alive:true,hit:0};g.traverse(o=>{if(o.isMesh)o.castShadow=true});world.add(g);return g}
+const enemies=[enemy(-18,-3),enemy(-23,3),enemy(-28,-4),enemy(-31,4)];
+const boss=enemy(-46,0);boss.scale.setScalar(1.65);boss.userData.hp=260;boss.userData.max=260;boss.children[0].material=red;boss.children[1].material=darkstone;
+
+// UI/state
+let hp=100, potions=3, quest=0, attacking=0, dodging=0, dialogue=false, started=false;
+const questEl=document.getElementById('quest'), hint=document.getElementById('hint'), hpEl=document.getElementById('hp'), statText=document.getElementById('statText'), dialog=document.getElementById('dialog'), speaker=document.getElementById('speaker'), text=document.getElementById('text');
+function setHP(v){hp=Math.max(0,Math.min(100,v));hpEl.style.width=hp+'%';statText.textContent=hp+' / 100';}
+function say(s,t){speaker.textContent=s;text.textContent=t;dialog.style.display='block';dialogue=true;speech(t);setTimeout(()=>{dialog.style.display='none';dialogue=false},4200)}
+function speech(t){try{speechSynthesis.cancel();let u=new SpeechSynthesisUtterance(t);u.lang='ru-RU';u.rate=.92;speechSynthesis.speak(u)}catch(e){}}
+function updateQuest(){const q=[
+'Задание: доберись до часовни',
+'Задание: поговори со стариком',
+'Задание: пройди через ворота',
+'Задание: уничтожь Тени у руин',
+'Задание: одолей Хранителя колокола',
+'Глава I завершена'
+];questEl.textContent=q[quest]}
+updateQuest();
+
+// input
+const keys={};addEventListener('keydown',e=>{keys[e.code]=true;if(e.code==='KeyE')interact();if(e.code==='KeyQ')potion();if(e.code==='Space')dodge();if(e.code==='KeyF'||e.code==='Mouse0')attack()});addEventListener('keyup',e=>keys[e.code]=false);
+addEventListener('pointerdown',e=>{if(e.target===renderer.domElement)attack()});
+let joy={x:0,y:0};const joyEl=document.getElementById('joy'),knob=document.getElementById('knob');let joyId=null;
+joyEl.addEventListener('pointerdown',e=>{joyId=e.pointerId;joyEl.setPointerCapture(joyId);moveJoy(e)});
+joyEl.addEventListener('pointermove',e=>{if(e.pointerId===joyId)moveJoy(e)});
+joyEl.addEventListener('pointerup',()=>{joy.x=joy.y=0;knob.style.transform='translate(0,0)';joyId=null});
+function moveJoy(e){let r=joyEl.getBoundingClientRect(),dx=e.clientX-(r.left+r.width/2),dy=e.clientY-(r.top+r.height/2),m=Math.min(42,Math.hypot(dx,dy)),a=Math.atan2(dy,dx);joy.x=Math.cos(a)*m/42;joy.y=Math.sin(a)*m/42;knob.style.transform=`translate(${joy.x*32}px,${joy.y*32}px)`}
+document.getElementById('attack').onpointerdown=attack;document.getElementById('dodge').onpointerdown=dodge;document.getElementById('potion').onpointerdown=potion;
+function attack(){if(!started||attacking||dodging)return;attacking=1;player.rotation.y-=.7;setTimeout(()=>{let best=null,bd=3.4;for(const e of enemies.concat([boss]))if(e.userData.alive){let d=player.position.distanceTo(e.position);if(d<bd){bd=d;best=e}}if(best){best.userData.hp-=45;best.userData.hit=1;if(best.userData.hp<=0){best.userData.alive=false;best.visible=false;if(best===boss){quest=5;updateQuest();hint.textContent='Колокол замолчал. Долина освобождена.';say('Хранитель','Ты разрушил печать... но это лишь начало.')}else if(enemies.every(e=>!e.userData.alive)&&quest>=3){quest=4;updateQuest();}}}},180);setTimeout(()=>attacking=0,420)}
+function dodge(){if(!started||dodging)return;dodging=1;let dir=new THREE.Vector3(0,0,1).applyQuaternion(player.quaternion);player.position.addScaledVector(dir,-2.8);setTimeout(()=>dodging=0,380)}
+function potion(){if(potions>0&&hp<100){potions--;setHP(hp+35);hint.textContent='Зелье использовано. Осталось: '+potions}}
+function interact(){if(!started)return;let d=player.position.distanceTo(elder.position);if(d<5&&quest===0){quest=1;updateQuest();say('Старик','Ты пришёл слишком поздно. После третьего удара колокола Тени выходят из руин. Иди к воротам.');}
+else if(d<7&&quest===1){quest=2;updateQuest();say('Старик','Не оборачивайся. Внутри долины тебя уже заметили.');}
+else if(quest===5){say('Старик','Теперь путь открыт. Это только первая глава.');}}
+
+// camera
+let yaw=0,pitch=.22,camDist=7,drag=false,lastX=0,lastY=0;
+renderer.domElement.addEventListener('pointerdown',e=>{drag=true;lastX=e.clientX;lastY=e.clientY});
+addEventListener('pointerup',()=>drag=false);addEventListener('pointermove',e=>{if(!drag)return;let dx=e.clientX-lastX,dy=e.clientY-lastY;lastX=e.clientX;lastY=e.clientY;yaw-=dx*.006;pitch=Math.max(-.15,Math.min(.7,pitch-dy*.004))});
+
+function move(dt){
+ let f=0,s=0;if(keys.KeyW)f+=1;if(keys.KeyS)f-=1;if(keys.KeyA)s-=1;if(keys.KeyD)s+=1;
+ f-=joy.y;s+=joy.x;
+ let len=Math.hypot(f,s);if(len>1){f/=len;s/=len}
+ if(len>.05&&!dialogue){let v=new THREE.Vector3(s,0,-f);v.applyAxisAngle(new THREE.Vector3(0,1,0),yaw);player.position.addScaledVector(v,dt*5.2);player.rotation.y=Math.atan2(v.x,v.z)}
+ player.position.x=Math.max(-50,Math.min(50,player.position.x));player.position.z=Math.max(-54,Math.min(30,player.position.z));
+ if(quest===0&&player.position.z<-32)hint.textContent='Часовня впереди. Нажми E рядом со стариком.';
+ if(quest===1&&player.position.z<2)hint.textContent='Ворота открыты. Иди к руинам.';
+ if(quest===2&&player.position.z<-10){quest=3;updateQuest();hint.textContent='Тени вышли из тумана. Уничтожь их.'}
+ if(quest===3&&enemies.every(e=>!e.userData.alive)){quest=4;updateQuest();hint.textContent='В глубине руин ждёт Хранитель.'}
+ if(quest===4&&player.position.z<-40)hint.textContent='Хранитель колокола ждёт тебя.';
+}
+function enemyAI(dt){
+ for(const e of enemies.concat([boss]))if(e.userData.alive){let d=e.position.distanceTo(player.position);if(d<10){let v=player.position.clone().sub(e.position);v.y=0;let l=v.length();if(l>2.2)e.position.addScaledVector(v.normalize(),dt*(e===boss?1.15:1.7));else if(e.userData.hit<=0&&!dodging){setHP(hp-(e===boss?8:4));e.userData.hit=.9}}e.userData.hit=Math.max(0,e.userData.hit-dt)}
+}
+let last=performance.now();
+function loop(now){let dt=Math.min(.033,(now-last)/1000);last=now;if(started){move(dt);enemyAI(dt);let target=player.position.clone();let off=new THREE.Vector3(Math.sin(yaw)*camDist,3.1+pitch*3,Math.cos(yaw)*camDist);camera.position.lerp(target.clone().add(off),.1);camera.lookAt(target.x,target.y+1.2,target.z);for(const l of flames)l.intensity=1.8+Math.sin(now*.006+l.id)*.35}renderer.render(scene,camera);requestAnimationFrame(loop)}
+requestAnimationFrame(loop);
+
+document.getElementById('startBtn').onclick=()=>{started=true;document.getElementById('start').style.display='none';speech('Старик','Добро пожаловать в долину. Найди часовню.');};
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
+</script>
+</body>
+</html>
